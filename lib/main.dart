@@ -260,6 +260,23 @@ class _HomeScreenState extends State<HomeScreen> {
                   textColor: Colors.white,
                 ),
               ),
+              const SizedBox(height: 20),
+
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AttendanceHistoryScreen(),
+                    ),
+                  );
+                },
+                child: _card(
+                  Colors.orange,
+    "Attendance History 📊",
+    "View past attendance →",
+  ),
+),
             ],
           ),
         ),
@@ -446,6 +463,50 @@ class ClassesScreen extends StatelessWidget {
   }
 }
 
+
+class AttendanceHistoryScreen extends StatelessWidget {
+  const AttendanceHistoryScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Attendance History")),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('attendance')
+            .orderBy('date', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final docs = snapshot.data!.docs;
+
+          if (docs.isEmpty) {
+            return const Center(child: Text("No attendance yet"));
+          }
+
+          return ListView.builder(
+            itemCount: docs.length,
+            itemBuilder: (context, index) {
+              final data = docs[index];
+
+              return ListTile(
+                title: Text(data['subject']),
+                subtitle: Text(data['date']),
+                trailing: const Text("✔",
+                    style: TextStyle(color: Colors.green)),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
 class ClassCard extends StatefulWidget {
   final String subject;
   final String teacher;
@@ -475,82 +536,97 @@ Widget build(BuildContext context) {
         isActive = data['isActive'] ?? false;
       }
 
-      return Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFFD6E6F2),
-          borderRadius: BorderRadius.circular(20),
-        ),
+      return FutureBuilder<QuerySnapshot>(
+        future: FirebaseFirestore.instance
+            .collection('attendance')
+            .where('subject', isEqualTo: widget.subject)
+            .where('date', isEqualTo: DateTime.now().toIso8601String().split('T')[0])
+            .where('studentId', isEqualTo: 'temp-user')
+            .get(),
+        builder: (context, snapshot2) {
 
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+          bool alreadyMarked = false;
 
-            Text(
-              widget.subject,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+          if (snapshot2.hasData && snapshot2.data!.docs.isNotEmpty) {
+            alreadyMarked = true;
+          }
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFD6E6F2),
+              borderRadius: BorderRadius.circular(20),
             ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
 
-            const SizedBox(height: 4),
+                Text(widget.subject,
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold)),
 
-            Text(widget.teacher),
+                const SizedBox(height: 4),
 
-            const SizedBox(height: 12),
+                Text(widget.teacher),
 
-            if (isActive)
-              const Text(
-                "Class Active 🔴",
-                style: TextStyle(
-                  color: Colors.red,
-                  fontWeight: FontWeight.bold,
-                ),
-              )
-            else
-              const Text(
-                "Class not active",
-                style: TextStyle(color: Colors.black54),
-              ),
+                const SizedBox(height: 12),
 
-            const SizedBox(height: 10),
+                if (isActive)
+                  const Text("Class Active 🔴",
+                      style: TextStyle(
+                          color: Colors.red, fontWeight: FontWeight.bold))
+                else
+                  const Text("Class not active",
+                      style: TextStyle(color: Colors.black54)),
 
-            if (isActive && !attendanceMarked)
-              ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    attendanceMarked = true;
-                    updateStreak();
-                  });
+                const SizedBox(height: 10),
 
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                          "Attendance marked for ${widget.subject} ✅"),
-                    ),
-                  );
-                },
-                child: const Text("Mark Attendance 📸"),
-              ),
+                if (isActive && !alreadyMarked)
+                  ElevatedButton(
+                    onPressed: () async {
+                      final now = DateTime.now();
 
-            if (attendanceMarked)
-              const Text(
-                "Attendance Submitted ✅",
-                style: TextStyle(
-                  color: Colors.green,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-          ],
-        ),
+                      final today = now.toIso8601String().split('T')[0];
+                      final time = DateFormat('HH:mm').format(now);
+
+                      await FirebaseFirestore.instance
+                          .collection('attendance')
+                          .add({
+                        'subject': widget.subject,
+                        'date': today,
+                        'time': time,
+                        'studentId': 'temp-user',
+                      });
+
+                      updateStreak();
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                              "Attendance saved for ${widget.subject} ✅"),
+                        ),
+                      );
+
+                      setState(() {});
+                    },
+                    child: const Text("Mark Attendance 📸"),
+                  ),
+
+                if (alreadyMarked)
+                  const Text("Attendance Submitted ✅",
+                      style: TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold)),
+              ],
+            ),
+          );
+        },
       );
     },
   );
 }
 }
-
 // ================= NEWS =================
 
 class NewsScreen extends StatelessWidget {
@@ -850,48 +926,76 @@ class _TeacherScreenState extends State<TeacherScreen> {
               color: const Color(0xFFD6E6F2),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
+            child: Column(
+  crossAxisAlignment: CrossAxisAlignment.start,
+  children: [
 
-                // SUBJECT NAME
-                Expanded(
-                  child: Text(
-                    subject,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
+    Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
 
-                // SWITCH
-                StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                  stream: FirebaseFirestore.instance
-                      .collection('classes')
-                      .doc(subject)
-                      .snapshots(),
-                  builder: (context, snapshot) {
-                    bool isActive = false;
-
-                    if (snapshot.hasData && snapshot.data!.data() != null) {
-                      final data = snapshot.data!.data()!;
-                      isActive = data['isActive'] ?? false;
-                    }
-
-                    return Switch(
-                      value: isActive,
-                      onChanged: (value) async {
-                        await FirebaseFirestore.instance
-                            .collection('classes')
-                            .doc(subject)
-                            .set({'isActive': value});
-                      },
-                    );
-                  },
-                ),
-              ],
+        Expanded(
+          child: Text(
+            subject,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
             ),
+          ),
+        ),
+
+        StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('classes')
+              .doc(subject)
+              .snapshots(),
+          builder: (context, snapshot) {
+            bool isActive = false;
+
+            if (snapshot.hasData && snapshot.data!.data() != null) {
+              final data = snapshot.data!.data()!;
+              isActive = data['isActive'] ?? false;
+            }
+
+            return Switch(
+              value: isActive,
+              onChanged: (value) async {
+                await FirebaseFirestore.instance
+                    .collection('classes')
+                    .doc(subject)
+                    .set({'isActive': value});
+              },
+            );
+          },
+        ),
+      ],
+    ),
+
+    const SizedBox(height: 10),
+
+    ElevatedButton(
+      onPressed: () async {
+        final today =
+            DateTime.now().toIso8601String().split('T')[0];
+
+        final snapshot = await FirebaseFirestore.instance
+            .collection('attendance')
+            .where('subject', isEqualTo: subject)
+            .where('date', isEqualTo: today)
+            .get();
+
+        for (var doc in snapshot.docs) {
+          await doc.reference.delete();
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Reset done for $subject")),
+        );
+      },
+      child: const Text("Reset Attendance 🔄"),
+    ),
+  ],
+),
           );
         }).toList(),
       ),
