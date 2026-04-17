@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1081449182714",
+    "project_id": "campusync-8626d",
+    "storage_bucket": "campusync-8626d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1081449182714:android:8069bdfce14dbe51976043",
+        "android_client_info": {
+          "package_name": "com.example.campusync"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCcMkV4POKhpoeARXeU8ufPNiydCKi6sIc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
