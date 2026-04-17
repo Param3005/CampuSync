@@ -5,13 +5,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   runApp(const CampuSyncApp());
 }
@@ -19,7 +18,6 @@ void main() async {
 // 🔥 STREAK GLOBAL
 int streak = 0;
 String lastAttendanceDate = "";
-
 
 Future<void> loadStreak() async {
   final prefs = await SharedPreferences.getInstance();
@@ -69,11 +67,117 @@ class CampuSyncApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: const MainNavigation(),
+      home: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasData) {
+            return const MainNavigation(); // Logged in
+          } else {
+            return const LoginScreen(); // Not logged in
+          }
+        },
+      ),
     );
   }
 }
 
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final nameController = TextEditingController();
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
+
+  bool isLogin = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(isLogin ? "Login" : "Sign Up")),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            if (!isLogin)
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(labelText: "Name"),
+              ),
+            TextField(
+              controller: emailController,
+              decoration: const InputDecoration(labelText: "Email"),
+            ),
+
+            const SizedBox(height: 10),
+
+            TextField(
+              controller: passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: "Password"),
+            ),
+
+            const SizedBox(height: 20),
+
+            ElevatedButton(
+              onPressed: () async {
+                try {
+                  if (isLogin) {
+                    await FirebaseAuth.instance.signInWithEmailAndPassword(
+                      email: emailController.text.trim(),
+                      password: passwordController.text.trim(),
+                    );
+                  } else {
+                    final userCredential = await FirebaseAuth.instance
+                        .createUserWithEmailAndPassword(
+                          email: emailController.text.trim(),
+                          password: passwordController.text.trim(),
+                        );
+
+                    final uid = userCredential.user!.uid;
+
+                    await FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(uid)
+                        .set({
+                          'name': nameController.text.trim(),
+                          'email': emailController.text.trim(),
+                        });
+                  }
+                } catch (e) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text(e.toString())));
+                }
+              },
+              child: Text(isLogin ? "Login" : "Sign Up"),
+            ),
+
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  isLogin = !isLogin;
+                });
+              },
+              child: Text(
+                isLogin
+                    ? "Don't have an account? Sign Up"
+                    : "Already have an account? Login",
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 // ================= NAV =================
 
 class MainNavigation extends StatefulWidget {
@@ -86,11 +190,7 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   int currentIndex = 0;
 
-  final screens = [
-    const HomeScreen(),
-    NewsScreen(),
-    const ProfileScreen(),
-  ];
+  final screens = [const HomeScreen(), NewsScreen(), const ProfileScreen()];
 
   @override
   Widget build(BuildContext context) {
@@ -122,7 +222,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  
   @override
   void initState() {
     super.initState();
@@ -130,8 +229,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void initData() async {
-  await loadStreak(); 
-  setState(() {});
+    await loadStreak();
+    setState(() {});
   }
 
   @override
@@ -150,13 +249,28 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+               FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(FirebaseAuth.instance.currentUser!.uid)
+                    .get(),
+                builder: (context, snapshot) {
 
-              Text(
-                "Good Morning, Mappy 👋",
-                style: GoogleFonts.poppins(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
-                ),
+                  String name = "User";
+
+                  if (snapshot.hasData && snapshot.data!.data() != null) {
+                    final data = snapshot.data!.data() as Map<String, dynamic>;
+                    name = data['name'] ?? "User";
+                  }
+
+                  return Text(
+                    "Good Morning, $name 👋",
+                    style: GoogleFonts.poppins(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  );
+                },
               ),
 
               const SizedBox(height: 16),
@@ -170,10 +284,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       Text("$streak"),
                       const SizedBox(width: 6),
                       Text(
-                        streak == 0 ? '😭' : streak < 5 ? '🐣' : '🔥',
+                        streak == 0
+                            ? '😭'
+                            : streak < 5
+                            ? '🐣'
+                            : '🔥',
                       ),
                     ],
-                  )
+                  ),
                 ],
               ),
 
@@ -194,26 +312,30 @@ class _HomeScreenState extends State<HomeScreen> {
                           onPressed: () {
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (_) => const TeacherScreen()),
+                              MaterialPageRoute(
+                                builder: (_) => const TeacherScreen(),
+                              ),
                             ).then((_) {
                               setState(() {});
                             });
                           },
                           child: const Text("Teacher Panel 👩‍🏫"),
                         ),
-                                
+
                         const SizedBox(height: 16),
 
-                        Text(day,
-                            style: const TextStyle(
-                                fontSize: 40, fontWeight: FontWeight.bold)),
+                        Text(
+                          day,
+                          style: const TextStyle(
+                            fontSize: 40,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         Text(month),
                       ],
                     ),
                     const SizedBox(width: 20),
-                    Expanded(
-                      child: Text("$weekday\nHave a great day 🌤"),
-                    ),
+                    Expanded(child: Text("$weekday\nHave a great day 🌤")),
                   ],
                 ),
               ),
@@ -249,8 +371,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const ClassesScreen()),
-                  ).then((_){
-                    setState((){});
+                  ).then((_) {
+                    setState(() {});
                   });
                 },
                 child: _card(
@@ -273,10 +395,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
                 child: _card(
                   Colors.orange,
-    "Attendance History 📊",
-    "View past attendance →",
-  ),
-),
+                  "Attendance History 📊",
+                  "View past attendance →",
+                ),
+              ),
             ],
           ),
         ),
@@ -284,8 +406,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _card(Color color, String title, String footer,
-      {Color textColor = Colors.black}) {
+  Widget _card(
+    Color color,
+    String title,
+    String footer, {
+    Color textColor = Colors.black,
+  }) {
     return Container(
       height: 150,
       width: double.infinity,
@@ -298,15 +424,25 @@ class _HomeScreenState extends State<HomeScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: textColor)),
-          Text(footer,
-              style: TextStyle(
-                  color: Color.fromRGBO(
-                      textColor.red, textColor.green, textColor.blue, 0.7))),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+          ),
+          Text(
+            footer,
+            style: TextStyle(
+              color: Color.fromRGBO(
+                textColor.red,
+                textColor.green,
+                textColor.blue,
+                0.7,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -337,15 +473,12 @@ class _TodoScreenState extends State<TodoScreen> {
   void loadTasks() async {
     final prefs = await SharedPreferences.getInstance();
     final data = prefs.getStringList('tasks');
-    
+
     if (data != null) {
       setState(() {
         tasks = data.map((e) {
           final parts = e.split('|');
-          return {
-            "title": parts[0],
-            "done": parts[1] == 'true',
-          };
+          return {"title": parts[0], "done": parts[1] == 'true'};
         }).toList();
       });
     }
@@ -354,9 +487,9 @@ class _TodoScreenState extends State<TodoScreen> {
   void saveTasks() async {
     final prefs = await SharedPreferences.getInstance();
     final data = tasks
-      .map((task) => "${task['title']}|${task['done']}")
-      .toList();
-      
+        .map((task) => "${task['title']}|${task['done']}")
+        .toList();
+
     prefs.setStringList('tasks', data);
   }
 
@@ -387,22 +520,22 @@ class _TodoScreenState extends State<TodoScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-
             Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: controller,
-                    decoration:
-                        const InputDecoration(hintText: "Add a task..."),
+                    decoration: const InputDecoration(
+                      hintText: "Add a task...",
+                    ),
                   ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.add),
-                  onPressed: (){
+                  onPressed: () {
                     addTask();
                   },
-                )
+                ),
               ],
             ),
 
@@ -420,7 +553,7 @@ class _TodoScreenState extends State<TodoScreen> {
                       icon: Icon(Icons.delete, color: Colors.red),
                       onPressed: () {
                         deleteTask(index);
-                        },
+                      },
                     ),
                     onChanged: (val) {
                       setState(() {
@@ -463,7 +596,6 @@ class ClassesScreen extends StatelessWidget {
   }
 }
 
-
 class AttendanceHistoryScreen extends StatelessWidget {
   const AttendanceHistoryScreen({super.key});
 
@@ -474,10 +606,13 @@ class AttendanceHistoryScreen extends StatelessWidget {
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('attendance')
+            .where(
+              'studentId',
+              isEqualTo: FirebaseAuth.instance.currentUser!.uid,
+            )
             .orderBy('date', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
-
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -500,8 +635,10 @@ class AttendanceHistoryScreen extends StatelessWidget {
               return ListTile(
                 title: Text(data['subject']),
                 subtitle: Text("$date • $time"),
-                trailing: const Text("✔",
-                    style: TextStyle(color: Colors.green)),
+                trailing: const Text(
+                  "✔",
+                  style: TextStyle(color: Colors.green),
+                ),
               );
             },
           );
@@ -525,111 +662,137 @@ class _ClassCardState extends State<ClassCard> {
   bool attendanceMarked = false;
 
   @override
-Widget build(BuildContext context) {
-  return StreamBuilder<DocumentSnapshot>(
-    stream: FirebaseFirestore.instance
-        .collection('classes')
-        .doc(widget.subject)
-        .snapshots(),
-    builder: (context, snapshot) {
+  Widget build(BuildContext context) {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('classes')
+          .doc(widget.subject)
+          .snapshots(),
+      builder: (context, snapshot) {
+        bool isActive = false;
 
-      bool isActive = false;
+        if (snapshot.hasData && snapshot.data!.data() != null) {
+          final data = snapshot.data!.data() as Map<String, dynamic>;
+          isActive = data['isActive'] ?? false;
+        }
 
-      if (snapshot.hasData && snapshot.data!.data() != null) {
-        final data = snapshot.data!.data() as Map<String, dynamic>;
-        isActive = data['isActive'] ?? false;
-      }
+        return FutureBuilder<QuerySnapshot>(
+          future: FirebaseFirestore.instance
+              .collection('attendance')
+              .where('subject', isEqualTo: widget.subject)
+              .where(
+                'date',
+                isEqualTo: DateTime.now().toIso8601String().split('T')[0],
+              )
+              .where(
+                      'studentId',
+                      isEqualTo: FirebaseAuth.instance.currentUser!.uid,
+                    )
+              .get(),
+          builder: (context, snapshot2) {
+            bool alreadyMarked = false;
 
-      return FutureBuilder<QuerySnapshot>(
-        future: FirebaseFirestore.instance
-            .collection('attendance')
-            .where('subject', isEqualTo: widget.subject)
-            .where('date', isEqualTo: DateTime.now().toIso8601String().split('T')[0])
-            .where('studentId', isEqualTo: 'temp-user')
-            .get(),
-        builder: (context, snapshot2) {
+            if (snapshot2.hasData && snapshot2.data!.docs.isNotEmpty) {
+              alreadyMarked = true;
+            }
 
-          bool alreadyMarked = false;
-
-          if (snapshot2.hasData && snapshot2.data!.docs.isNotEmpty) {
-            alreadyMarked = true;
-          }
-
-          return Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFFD6E6F2),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-
-                Text(widget.subject,
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFD6E6F2),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.subject,
                     style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.bold)),
-
-                const SizedBox(height: 4),
-
-                Text(widget.teacher),
-
-                const SizedBox(height: 12),
-
-                if (isActive)
-                  const Text("Class Active 🔴",
-                      style: TextStyle(
-                          color: Colors.red, fontWeight: FontWeight.bold))
-                else
-                  const Text("Class not active",
-                      style: TextStyle(color: Colors.black54)),
-
-                const SizedBox(height: 10),
-
-                if (isActive && !alreadyMarked)
-                  ElevatedButton(
-                    onPressed: () async {
-                      final now = DateTime.now();
-
-                      final today = now.toIso8601String().split('T')[0];
-                      final time = DateFormat('HH:mm').format(now);
-
-                      await FirebaseFirestore.instance
-                          .collection('attendance')
-                          .add({
-                        'subject': widget.subject,
-                        'date': today,
-                        'time': time,
-                        'studentId': 'temp-user',
-                      });
-
-                      updateStreak();
-
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                              "Attendance saved for ${widget.subject} ✅"),
-                        ),
-                      );
-
-                      setState(() {});
-                    },
-                    child: const Text("Mark Attendance 📸"),
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
 
-                if (alreadyMarked)
-                  const Text("Attendance Submitted ✅",
+                  const SizedBox(height: 4),
+
+                  Text(widget.teacher),
+
+                  const SizedBox(height: 12),
+
+                  if (isActive)
+                    const Text(
+                      "Class Active 🔴",
                       style: TextStyle(
-                          color: Colors.green,
-                          fontWeight: FontWeight.bold)),
-              ],
-            ),
-          );
-        },
-      );
-    },
-  );
-}
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    )
+                  else
+                    const Text(
+                      "Class not active",
+                      style: TextStyle(color: Colors.black54),
+                    ),
+
+                  const SizedBox(height: 10),
+
+                  if (isActive && !alreadyMarked)
+                    ElevatedButton(
+                      onPressed: () async {
+                        final now = DateTime.now();
+
+                        final today = now.toIso8601String().split('T')[0];
+                        final time = DateFormat('HH:mm').format(now);
+
+                        final user = FirebaseAuth.instance.currentUser!;
+                        final userDoc = await FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(user.uid)
+                            .get();
+
+                        final userData = userDoc.data() as Map<String, dynamic>;
+
+                        await FirebaseFirestore.instance
+                            .collection('attendance')
+                            .add({
+                          'subject': widget.subject,
+                          'date': today,
+                          'time': time,
+                          'studentId': user.uid,
+                          'studentName': userData['name'],
+                        });
+
+                        updateStreak();
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              "Attendance saved for ${widget.subject} ✅",
+                            ),
+                          ),
+                        );
+
+                        setState(() {});
+                      },
+                      child: const Text("Mark Attendance 📸"),
+                    ),
+
+                  if (alreadyMarked)
+                    const Text(
+                      "Attendance Submitted ✅",
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
 }
 // ================= NEWS =================
 
@@ -637,7 +800,6 @@ class NewsScreen extends StatelessWidget {
   NewsScreen({super.key});
 
   final List<Map<String, String>> events = [
-
     {
       "title": "Aanayat 3.0 – Open Mic Competition",
       "date": "13 April 2026",
@@ -657,7 +819,7 @@ We are excited to invite you to showcase your talent at Aanayat 3.0! Whether it�
 
 Don’t miss this opportunity to express, perform, and inspire. Scan the QR code on the poster to register now!
 
-See you on stage! 🌟"""
+See you on stage! 🌟""",
     },
 
     {
@@ -683,13 +845,14 @@ Ananya Chauhan: +91 88003 01006
 Riya: +91 9220458425
 
 Regards
-NSS VIPS-TC"""
+NSS VIPS-TC""",
     },
 
     {
       "title": "Period Pain Stimulation Event",
       "date": "15 April 2026",
-      "full": """“Understanding pain builds empathy — experience it to respect it!”
+      "full":
+          """“Understanding pain builds empathy — experience it to respect it!”
 
 The NSS Unit of VIPS-TC is organizing a Period Pain Stimulation Event to spread awareness and break stigmas surrounding menstrual health.
 
@@ -702,7 +865,7 @@ The NSS Unit of VIPS-TC is organizing a Period Pain Stimulation Event to spread 
 
 Contact:
 Gaurika: 9971715297
-Vanshika: 8569991819"""
+Vanshika: 8569991819""",
     },
 
     {
@@ -718,7 +881,7 @@ The pens are ready, the wall is waiting, and the memories are calling!
 
 Celebrate your journey, friendships, and memories.
 
-Organised by Cultural Society, VSIT"""
+Organised by Cultural Society, VSIT""",
     },
 
     {
@@ -732,7 +895,7 @@ Donate rice, grains, pulses, biscuits, or packaged food.
 
 Even a small contribution can make a difference.
 
-Let’s help together ❤️"""
+Let’s help together ❤️""",
     },
 
     {
@@ -747,7 +910,7 @@ On World Creativity Day, VSIT is organising an exhibition for innovative ideas a
 
 🎓 E-Certificates for all participants
 
-Showcase your creativity and innovation!"""
+Showcase your creativity and innovation!""",
     },
   ];
 
@@ -766,10 +929,8 @@ Showcase your creativity and innovation!"""
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => NewsDetailScreen(
-                    event["title"]!,
-                    event["full"]!,
-                  ),
+                  builder: (_) =>
+                      NewsDetailScreen(event["title"]!, event["full"]!),
                 ),
               );
             },
@@ -783,9 +944,13 @@ Showcase your creativity and innovation!"""
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(event["title"]!,
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text(
+                    event["title"]!,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   const SizedBox(height: 6),
                   Text(event["date"]!),
                 ],
@@ -812,10 +977,7 @@ class NewsDetailScreen extends StatelessWidget {
       appBar: AppBar(title: Text(title)),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Text(
-          full,
-          style: const TextStyle(fontSize: 16),
-        ),
+        child: Text(full, style: const TextStyle(fontSize: 16)),
       ),
     );
   }
@@ -830,18 +992,17 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-
 class _ProfileScreenState extends State<ProfileScreen> {
-
+  final nameController = TextEditingController();
   @override
   void initState() {
     super.initState();
-    initData();   
+    initData();
   }
 
   void initData() async {
-  await loadStreak();
-  setState(() {}); 
+    await loadStreak();
+    setState(() {});
   }
 
   @override
@@ -854,17 +1015,88 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const SizedBox(height: 30),
+
+              ElevatedButton(
+                onPressed: () async {
+                  await FirebaseAuth.instance.signOut();
+                },
+                child: const Text("Logout"),
+              ),
 
               const SizedBox(height: 10),
 
-              Text(
-                "Mappy",
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF473C33),
-                ),
+              FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(FirebaseAuth.instance.currentUser!.uid)
+                    .get(),
+                builder: (context, snapshot) {
+                  String name = "User";
+
+                  if (snapshot.hasData && snapshot.data!.data() != null) {
+                    final data = snapshot.data!.data() as Map<String, dynamic>;
+                    name = data['name'] ?? "User";
+                  }
+                  
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: const TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF473C33),
+                        ),
+                      ),
+
+                      const SizedBox(height: 4),
+
+                      Text(
+                        FirebaseAuth.instance.currentUser?.email ?? "",
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
+              
+              const SizedBox(height: 20),
+
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: "Edit Name",
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                ElevatedButton(
+                  onPressed: () async {
+                    final uid = FirebaseAuth.instance.currentUser!.uid;
+
+                    await FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(uid)
+                        .update({
+                      'name': nameController.text.trim(),
+                    });
+
+                    setState(() {}); // refresh UI
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Name updated successfully ✅")),
+                    );
+                  },
+                  child: const Text("Save Name"),
+                ),
 
               const SizedBox(height: 4),
 
@@ -888,7 +1120,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const Text(
                       "Current Streak",
                       style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold),
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 10),
                     Text(
@@ -931,75 +1165,74 @@ class _TeacherScreenState extends State<TeacherScreen> {
               borderRadius: BorderRadius.circular(20),
             ),
             child: Column(
-  crossAxisAlignment: CrossAxisAlignment.start,
-  children: [
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        subject,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
 
-    Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
+                    StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                      stream: FirebaseFirestore.instance
+                          .collection('classes')
+                          .doc(subject)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        bool isActive = false;
 
-        Expanded(
-          child: Text(
-            subject,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
+                        if (snapshot.hasData && snapshot.data!.data() != null) {
+                          final data = snapshot.data!.data()!;
+                          isActive = data['isActive'] ?? false;
+                        }
+
+                        return Switch(
+                          value: isActive,
+                          onChanged: (value) async {
+                            await FirebaseFirestore.instance
+                                .collection('classes')
+                                .doc(subject)
+                                .set({'isActive': value});
+                          },
+                        );
+                      },
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 10),
+
+                ElevatedButton(
+                  onPressed: () async {
+                    final today = DateTime.now().toIso8601String().split(
+                      'T',
+                    )[0];
+
+                    final snapshot = await FirebaseFirestore.instance
+                        .collection('attendance')
+                        .where('subject', isEqualTo: subject)
+                        .where('date', isEqualTo: today)
+                        .get();
+
+                    for (var doc in snapshot.docs) {
+                      await doc.reference.delete();
+                    }
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text("Reset done for $subject")),
+                    );
+                  },
+                  child: const Text("Reset Attendance 🔄"),
+                ),
+              ],
             ),
-          ),
-        ),
-
-        StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
-              .collection('classes')
-              .doc(subject)
-              .snapshots(),
-          builder: (context, snapshot) {
-            bool isActive = false;
-
-            if (snapshot.hasData && snapshot.data!.data() != null) {
-              final data = snapshot.data!.data()!;
-              isActive = data['isActive'] ?? false;
-            }
-
-            return Switch(
-              value: isActive,
-              onChanged: (value) async {
-                await FirebaseFirestore.instance
-                    .collection('classes')
-                    .doc(subject)
-                    .set({'isActive': value});
-              },
-            );
-          },
-        ),
-      ],
-    ),
-
-    const SizedBox(height: 10),
-
-    ElevatedButton(
-      onPressed: () async {
-        final today =
-            DateTime.now().toIso8601String().split('T')[0];
-
-        final snapshot = await FirebaseFirestore.instance
-            .collection('attendance')
-            .where('subject', isEqualTo: subject)
-            .where('date', isEqualTo: today)
-            .get();
-
-        for (var doc in snapshot.docs) {
-          await doc.reference.delete();
-        }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Reset done for $subject")),
-        );
-      },
-      child: const Text("Reset Attendance 🔄"),
-    ),
-  ],
-),
           );
         }).toList(),
       ),
