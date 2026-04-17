@@ -491,11 +491,15 @@ class AttendanceHistoryScreen extends StatelessWidget {
           return ListView.builder(
             itemCount: docs.length,
             itemBuilder: (context, index) {
-              final data = docs[index];
+              final doc = docs[index];
+              final data = doc.data() as Map<String, dynamic>;
+
+              final date = data['date'] ?? "No date";
+              final time = data.containsKey('time') ? data['time'] : "--:--";
 
               return ListTile(
                 title: Text(data['subject']),
-                subtitle: Text(data['date']),
+                subtitle: Text("$date • $time"),
                 trailing: const Text("✔",
                     style: TextStyle(color: Colors.green)),
               );
