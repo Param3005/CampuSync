@@ -8,6 +8,8 @@ import 'firebase_options.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'calendar_screen.dart';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -275,6 +277,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
               ),
 
+
               const SizedBox(height: 16),
 
               Row(
@@ -360,12 +363,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 20),
 
-              _card(
+            GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CalendarScreen(),
+                  ),
+                );
+              },
+              child: _card(
                 const Color(0xFFF8C8DC),
                 "Calendar",
                 "Tap to view schedule →",
               ),
-
+            ),
               const SizedBox(height: 20),
 
               GestureDetector(
@@ -762,7 +774,6 @@ class _ClassCardState extends State<ClassCard> {
                         final time = DateFormat('HH:mm').format(now);
 
                         final user = FirebaseAuth.instance.currentUser!;
-
                         final userDoc = await FirebaseFirestore.instance
                             .collection('users')
                             .doc(user.uid)
