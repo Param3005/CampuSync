@@ -6,11 +6,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-<<<<<<< HEAD
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-=======
->>>>>>> b003814f839404a7cf7c93c628eb61d6f73d8722
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -665,7 +662,6 @@ class ClassCard extends StatefulWidget {
 
 class _ClassCardState extends State<ClassCard> {
   bool attendanceMarked = false;
-<<<<<<< HEAD
   File? image;
 
   Future<void> captureImage() async {
@@ -678,8 +674,6 @@ class _ClassCardState extends State<ClassCard> {
       });
     }
   }
-=======
->>>>>>> b003814f839404a7cf7c93c628eb61d6f73d8722
 
   @override
   Widget build(BuildContext context) {
@@ -759,36 +753,24 @@ class _ClassCardState extends State<ClassCard> {
                   if (isActive && !alreadyMarked)
                     ElevatedButton(
                       onPressed: () async {
-<<<<<<< HEAD
                         //open camera
                         await captureImage();
                         if (image == null) return;
 
                         final now = DateTime.now();
-=======
-                        final now = DateTime.now();
-
->>>>>>> b003814f839404a7cf7c93c628eb61d6f73d8722
                         final today = now.toIso8601String().split('T')[0];
                         final time = DateFormat('HH:mm').format(now);
 
                         final user = FirebaseAuth.instance.currentUser!;
-<<<<<<< HEAD
 
-=======
->>>>>>> b003814f839404a7cf7c93c628eb61d6f73d8722
                         final userDoc = await FirebaseFirestore.instance
                             .collection('users')
                             .doc(user.uid)
                             .get();
 
                         final userData = userDoc.data() as Map<String, dynamic>;
-<<<<<<< HEAD
                         
                         //save attendance
-=======
-
->>>>>>> b003814f839404a7cf7c93c628eb61d6f73d8722
                         await FirebaseFirestore.instance
                             .collection('attendance')
                             .add({
@@ -803,13 +785,7 @@ class _ClassCardState extends State<ClassCard> {
 
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-<<<<<<< HEAD
                             content: Text("Attendance saved for ${widget.subject} ✅"),
-=======
-                            content: Text(
-                              "Attendance saved for ${widget.subject} ✅",
-                            ),
->>>>>>> b003814f839404a7cf7c93c628eb61d6f73d8722
                           ),
                         );
 
