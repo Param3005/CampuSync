@@ -1,6 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<<<<<<< HEAD
 <uses-permission android:name="android.permission.CAMERA"/>
 
+=======
+>>>>>>> b003814f839404a7cf7c93c628eb61d6f73d8722
     <application
         android:label="campusync"
         android:name="${applicationName}"
