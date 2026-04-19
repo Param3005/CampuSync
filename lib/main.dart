@@ -105,80 +105,139 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(isLogin ? "Login" : "Sign Up")),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            if (!isLogin)
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: "Name"),
-              ),
-            TextField(
-              controller: emailController,
-              decoration: const InputDecoration(labelText: "Email"),
+      backgroundColor: const Color(0xFFF5F1EB),
+
+      body: Center(
+        child: SingleChildScrollView(
+          child: Container(
+            margin: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
             ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
 
-            const SizedBox(height: 10),
+                // 🔥 TITLE
+                Text(
+                  isLogin ? "CampuSync" : "Create Account ✨",
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF473C33),
+                  ),
+                ),
 
-            TextField(
-              controller: passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: "Password"),
-            ),
+                const SizedBox(height: 20),
 
-            const SizedBox(height: 20),
+                if (!isLogin)
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(
+                      labelText: "Name",
+                      filled: true,
+                      fillColor: const Color(0xFFF8F6F3),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
 
-            ElevatedButton(
-              onPressed: () async {
-                try {
-                  if (isLogin) {
-                    await FirebaseAuth.instance.signInWithEmailAndPassword(
-                      email: emailController.text.trim(),
-                      password: passwordController.text.trim(),
-                    );
-                  } else {
-                    final userCredential = await FirebaseAuth.instance
-                        .createUserWithEmailAndPassword(
+                const SizedBox(height: 10),
+
+                TextField(
+                  controller: emailController,
+                  decoration: InputDecoration(
+                    labelText: "Email",
+                    filled: true,
+                    fillColor: const Color(0xFFF8F6F3),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                TextField(
+                  controller: passwordController,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: "Password",
+                    filled: true,
+                    fillColor: const Color(0xFFF8F6F3),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF473C33),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () async {
+                    try {
+                      if (isLogin) {
+                        await FirebaseAuth.instance.signInWithEmailAndPassword(
                           email: emailController.text.trim(),
                           password: passwordController.text.trim(),
                         );
+                      } else {
+                        final userCredential = await FirebaseAuth.instance
+                          .createUserWithEmailAndPassword(
+                            email: emailController.text.trim(),
+                            password: passwordController.text.trim(),
+                          );
 
-                    final uid = userCredential.user!.uid;
+                        final uid = userCredential.user!.uid;
 
-                    await FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(uid)
-                        .set({
-                          'name': nameController.text.trim(),
-                          'email': emailController.text.trim(),
-                        });
-                  }
-                } catch (e) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text(e.toString())));
-                }
-              },
-              child: Text(isLogin ? "Login" : "Sign Up"),
-            ),
+                        await FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(uid)
+                          .set({
+                            'name': nameController.text.trim(),
+                            'email': emailController.text.trim(),
+                          });
+                      }
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(e.toString())),
+                      );
+                    }
+                  },
+                  child: Text(isLogin ? "Login" : "Sign Up"),
+                ),
 
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  isLogin = !isLogin;
-                });
-              },
-              child: Text(
-                isLogin
-                    ? "Don't have an account? Sign Up"
-                    : "Already have an account? Login",
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      isLogin = !isLogin;
+                    });
+                  },
+                  child: Text(
+                    isLogin
+                      ? "Don't have an account? Sign Up"
+                      : "Already have an account? Login",
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
+          ),
+       ),
     );
   }
 }
@@ -246,7 +305,7 @@ class _HomeScreenState extends State<HomeScreen> {
     String weekday = DateFormat('EEE').format(now);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF9F2),
+      backgroundColor: const Color(0xFFF8F6F3),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -283,17 +342,34 @@ class _HomeScreenState extends State<HomeScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text("Streak"),
+                  const Text(
+                    "Streak",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF473C33),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   Row(
                     children: [
-                      Text("$streak"),
-                      const SizedBox(width: 6),
                       Text(
+                        "$streak",
+                        style: const TextStyle(
+                          fontSize: 30,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF473C33),
+                        ),
+                      ),
+
+                      const SizedBox(width: 6),
+                      Image.asset(
                         streak == 0
-                            ? '😭'
-                            : streak < 5
-                            ? '🐣'
-                            : '🔥',
+                            ? 'assets/images/sad.png'
+                            : streak < 2
+                            ? 'assets/images/happy.png'
+                            : 'assets/images/streak.png',
+                        height: 35,
                       ),
                     ],
                   ),
@@ -356,7 +432,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
                 child: _card(
                   const Color(0xFF9EDC8A),
-                  "To-Do",
+                  "To-Do 📝",
                   "Tap to manage tasks →",
                 ),
               ),
@@ -374,7 +450,7 @@ class _HomeScreenState extends State<HomeScreen> {
               },
               child: _card(
                 const Color(0xFFF8C8DC),
-                "Calendar",
+                "Calendar 📅",
                 "Tap to view schedule →",
               ),
             ),
@@ -390,10 +466,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   });
                 },
                 child: _card(
-                  const Color(0xFF473C33),
+                  const Color(0xFF90CAF9),
                   "Join Classes 📚",
                   "View today's lectures →",
-                  textColor: Colors.white,
+
                 ),
               ),
               const SizedBox(height: 20),
@@ -408,7 +484,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 },
                 child: _card(
-                  Colors.orange,
+                  const Color(0xFFFFF176),
                   "Attendance History 📊",
                   "View past attendance →",
                 ),
@@ -529,7 +605,12 @@ class _TodoScreenState extends State<TodoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("My Tasks")),
+      backgroundColor: const Color(0xFFDDEEDC), 
+      appBar: AppBar(
+        title: const Text("My Tasks"),
+        backgroundColor: const Color(0xFF7FC97F), 
+        foregroundColor: Colors.black,
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -594,8 +675,12 @@ class ClassesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("My Classes")),
-      backgroundColor: const Color(0xFFFFF9F2),
+      appBar: AppBar(
+        title: const Text("My Classes"),
+        backgroundColor: const Color(0xFF90CAF9),
+        foregroundColor: Colors.black,
+      ),
+      backgroundColor: const Color(0xFFE3F2FD),
 
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -616,7 +701,12 @@ class AttendanceHistoryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Attendance History")),
+      backgroundColor: const Color(0xFFFFF9C4), 
+      appBar: AppBar(
+        title: const Text("Attendance History"),
+        backgroundColor: const Color(0xFFFFEB3B),
+        foregroundColor: Colors.black,
+      ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('attendance')
@@ -726,7 +816,7 @@ class _ClassCardState extends State<ClassCard> {
               margin: const EdgeInsets.only(bottom: 16),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFFD6E6F2),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Column(
@@ -764,6 +854,10 @@ class _ClassCardState extends State<ClassCard> {
 
                   if (isActive && !alreadyMarked)
                     ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF64B5F6),
+                        foregroundColor: Colors.white,
+                      ),
                       onPressed: () async {
                         //open camera
                         await captureImage();
