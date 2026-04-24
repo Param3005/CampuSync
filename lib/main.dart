@@ -9,12 +9,44 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'calendar_screen.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
+const String openAIApiKey = String.fromEnvironment('OPENAI_API_KEY');
+
+Future<String> askAI(String message) async {
+  try {
+    final response = await http.post(
+      Uri.parse("http://127.0.0.1:3000/ask"), // 👈 your backend
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: jsonEncode({"message": message}),
+    ).timeout(const Duration(seconds: 10));
+
+    final data = jsonDecode(response.body);
+
+    if (data["candidates"] != null &&
+    data["candidates"].isNotEmpty) {
+    return data["candidates"][0]["content"]["parts"][0]["text"];
+    } else if (data["error"] != null) {
+    return "Error: ${data["error"]}";
+    } else {
+    return "No response";
+}
+
+  } catch (e) {
+    print(e);
+    return "Connection failed 😢";
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
 
   runApp(const CampuSyncApp());
 }
@@ -229,15 +261,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   },
                   child: Text(
                     isLogin
-                      ? "Don't have an account? Sign Up"
-                      : "Already have an account? Login",
-                    ),
+                        ? "Don't have an account? Sign Up"
+                        : "Already have an account? Login",
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-       ),
+        ),
+      ),
     );
   }
 }
@@ -460,6 +492,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () {
                   Navigator.push(
                     context,
+                    MaterialPageRoute(builder: (_) => const ChatScreen()),
+                  );
+                },
+                child: _card(
+                  const Color(0xFFB39DDB),
+                  "AI Assistant 🤖",
+                  "Ask anything →",
+                ),
+              ),
+                const SizedBox(height: 20),
+
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
                     MaterialPageRoute(builder: (_) => const ClassesScreen()),
                   ).then((_) {
                     setState(() {});
@@ -620,8 +667,15 @@ class _TodoScreenState extends State<TodoScreen> {
                 Expanded(
                   child: TextField(
                     controller: controller,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       hintText: "Add a task...",
+                      prefixIcon: const Icon(Icons.chat_bubble_outline),
+                      filled: true,
+                      fillColor: Colors.grey.shade100,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
                     ),
                   ),
                 ),
@@ -685,10 +739,104 @@ class ClassesScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          ClassCard("Internet Of Things", "Dr. Megha Bansal"),
-          ClassCard("E-Commerce", "Ms. Prerna"),
-          ClassCard("Data Warehousing", "Dr. Priyanka Gupta"),
-          ClassCard("Deep Learning", "Ms. Tanvi Dalal"),
+          ClassCard("Internet Of Things", "Ms. Kanchan Chaudhary"),
+          ClassCard("E-Commerce", "Ms. Suchi Chawla"),
+          ClassCard("Data Warehousing", "Ms. Ruchika"),
+          ClassCard("Deep Learning", "Ms. Lakshmi Kumari"),
+        ],
+      ),
+    );
+  }
+}
+class ChatScreen extends StatefulWidget {
+  const ChatScreen({super.key});
+
+  @override
+  State<ChatScreen> createState() => _ChatScreenState();
+}
+
+class _ChatScreenState extends State<ChatScreen> {
+  final TextEditingController controller = TextEditingController();
+
+  List<Map<String, String>> messages = [];
+
+  bool isLoading = false;
+
+  void sendMessage() async {
+    String userMessage = controller.text.trim();
+    if (userMessage.isEmpty) return;
+
+    setState(() {
+      messages.add({"role": "user", "text": userMessage});
+      controller.clear();
+      isLoading = true;
+    });
+
+    String reply = await askAI(userMessage);
+
+    setState(() {
+      messages.add({"role": "ai", "text": reply});
+      isLoading = false; // 👈 ALWAYS reset
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("AI Assistant 🤖")),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              itemCount: messages.length,
+              itemBuilder: (context, index) {
+                final msg = messages[index];
+
+                return Container(
+                  alignment: msg["role"] == "user"
+                      ? Alignment.centerRight
+                      : Alignment.centerLeft,
+                  padding: const EdgeInsets.all(10),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: msg["role"] == "user"
+                          ? Colors.blue
+                          : Colors.grey[300],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      msg["text"]!,
+                      style: TextStyle(
+                        color: msg["role"] == "user"
+                            ? Colors.white
+                            : Colors.black,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+
+          if (isLoading) const CircularProgressIndicator(),
+
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  decoration: const InputDecoration(
+                    hintText: "Ask something...",
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.send),
+                onPressed: sendMessage,
+              ),
+            ],
+          ),
         ],
       ),
     );

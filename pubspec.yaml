@@ -31,15 +31,17 @@ dependencies:
   flutter:
     sdk: flutter
 
-  google_fonts: ^6.2.1
-  intl: ^0.19.0
-  firebase_core: ^3.15.2
-  cloud_firestore: ^5.6.12
-  firebase_auth: ^5.7.0
+  google_fonts: ^8.0.2
+  intl: ^0.20.2
+  firebase_core: ^4.7.0
+  cloud_firestore: ^6.3.0
+  firebase_auth: ^6.4.0
   image_picker: ^1.0.7
   table_calendar: ^3.0.9
   cupertino_icons: ^1.0.8
   shared_preferences: ^2.2.2
+  http: ^1.6.0
+  
 
 dev_dependencies:
   flutter_test:
@@ -103,3 +105,7 @@ flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/icon.png"
+  
+  web:
+    generate: true
+    image_path: "assets/icon.png"
