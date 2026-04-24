@@ -13,18 +13,26 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 const String openAIApiKey = String.fromEnvironment('OPENAI_API_KEY');
+const String askAIEndpoint = "http://127.0.0.1:3000/ask";
 
 Future<String> askAI(String message) async {
   try {
+    final idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
+
     final response = await http.post(
-      Uri.parse("http://127.0.0.1:3000/ask"), // 👈 your backend
+      Uri.parse(askAIEndpoint),
       headers: {
         "Content-Type": "application/json",
+        if (idToken != null) "Authorization": "Bearer $idToken",
       },
       body: jsonEncode({"message": message}),
     ).timeout(const Duration(seconds: 10));
 
     final data = jsonDecode(response.body);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      return "Error: ${data["error"] ?? response.body}";
+    }
 
     if (data["candidates"] != null &&
     data["candidates"].isNotEmpty) {
@@ -762,6 +770,48 @@ class _ChatScreenState extends State<ChatScreen> {
 
   bool isLoading = false;
 
+  bool isAttendanceQuestion(String message) {
+    final lower = message.toLowerCase();
+    return lower.contains('attendance') || lower.contains('present');
+  }
+
+  Future<String> getAttendanceSummary() async {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      return "Please log in first so I can check your attendance.";
+    }
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('attendance')
+          .where('studentId', isEqualTo: user.uid)
+          .get();
+
+      if (snapshot.docs.isEmpty) {
+        return "No attendance records found yet.";
+      }
+
+      final subjectCounts = <String, int>{};
+
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final subject = (data['subject'] ?? 'Unknown subject').toString();
+        subjectCounts[subject] = (subjectCounts[subject] ?? 0) + 1;
+      }
+
+      final total = snapshot.docs.length;
+      final subjects = subjectCounts.entries
+          .map((entry) => "${entry.key}: ${entry.value}")
+          .join("\n");
+
+      return "You have $total attendance record${total == 1 ? '' : 's'}.\n$subjects";
+    } catch (e) {
+      debugPrint("Attendance fetch failed: $e");
+      return "I couldn't fetch your attendance data right now. Please check your Firestore permissions and try again.";
+    }
+  }
+
   void sendMessage() async {
     String userMessage = controller.text.trim();
     if (userMessage.isEmpty) return;
@@ -772,7 +822,9 @@ class _ChatScreenState extends State<ChatScreen> {
       isLoading = true;
     });
 
-    String reply = await askAI(userMessage);
+    final reply = isAttendanceQuestion(userMessage)
+        ? await getAttendanceSummary()
+        : await askAI(userMessage);
 
     setState(() {
       messages.add({"role": "ai", "text": reply});
@@ -862,14 +914,25 @@ class AttendanceHistoryScreen extends StatelessWidget {
               'studentId',
               isEqualTo: FirebaseAuth.instance.currentUser!.uid,
             )
-            .orderBy('date', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            debugPrint("Attendance history failed: ${snapshot.error}");
+            return const Center(child: Text("Unable to load attendance"));
+          }
+
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final docs = snapshot.data!.docs;
+          final docs = snapshot.data!.docs.toList()
+            ..sort((a, b) {
+              final first = a.data() as Map<String, dynamic>;
+              final second = b.data() as Map<String, dynamic>;
+              return (second['date'] ?? '').toString().compareTo(
+                    (first['date'] ?? '').toString(),
+                  );
+            });
 
           if (docs.isEmpty) {
             return const Center(child: Text("No attendance yet"));
