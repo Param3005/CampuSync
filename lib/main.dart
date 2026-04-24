@@ -6,7 +6,9 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:local_auth/local_auth.dart';
 import 'dart:io';
 import 'calendar_screen.dart';
 import 'dart:convert';
@@ -95,6 +97,56 @@ void updateStreak() {
   saveStreak();
 }
 
+Future<UserCredential> signInWithGoogle() async {
+  final googleUser = await GoogleSignIn().signIn();
+  if (googleUser == null) {
+    throw Exception('Google sign-in cancelled');
+  }
+
+  final googleAuth = await googleUser.authentication;
+  final credential = GoogleAuthProvider.credential(
+    accessToken: googleAuth.accessToken,
+    idToken: googleAuth.idToken,
+  );
+
+  final userCredential =
+      await FirebaseAuth.instance.signInWithCredential(credential);
+
+  final userDoc = await FirebaseFirestore.instance
+      .collection('users')
+      .doc(userCredential.user!.uid)
+      .get();
+
+  if (!userDoc.exists) {
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userCredential.user!.uid)
+        .set({
+      'name': userCredential.user!.displayName ?? 'User',
+      'email': userCredential.user!.email ?? '',
+      'role': 'student',
+    });
+  }
+
+  return userCredential;
+}
+
+Future<bool> authenticateUser() async {
+  final LocalAuthentication auth = LocalAuthentication();
+  try {
+    return await auth.authenticate(
+      localizedReason: 'Please authenticate to mark attendance',
+      options: const AuthenticationOptions(
+        biometricOnly: true,
+        useErrorDialogs: true,
+        stickyAuth: true,
+      ),
+    );
+  } catch (_) {
+    return false;
+  }
+}
+
 Map<String, bool> classStatus = {
   "Internet Of Things": false,
   "E-Commerce": false,
@@ -117,7 +169,26 @@ class CampuSyncApp extends StatelessWidget {
           }
 
           if (snapshot.hasData) {
-            return const MainNavigation(); // Logged in
+            return FutureBuilder<DocumentSnapshot>(
+              future: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(snapshot.data!.uid)
+                  .get(),
+              builder: (context, roleSnapshot) {
+                if (roleSnapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final roleData = roleSnapshot.data?.data() as Map<String, dynamic>?;
+                final role = roleData?['role'] as String? ?? 'student';
+
+                if (role == 'teacher') {
+                  return const TeacherNavigation();
+                }
+
+                return const MainNavigation();
+              },
+            );
           } else {
             return const LoginScreen(); // Not logged in
           }
@@ -369,6 +440,38 @@ class _MainNavigationState extends State<MainNavigation> {
   }
 }
 
+class TeacherNavigation extends StatefulWidget {
+  const TeacherNavigation({super.key});
+
+  @override
+  State<TeacherNavigation> createState() => _TeacherNavigationState();
+}
+
+class _TeacherNavigationState extends State<TeacherNavigation> {
+  int currentIndex = 0;
+
+  final screens = [const TeacherScreen(), NewsScreen(), const ProfileScreen()];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: screens[currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: currentIndex,
+        selectedItemColor: const Color(0xFF473C33),
+        onTap: (index) {
+          setState(() => currentIndex = index);
+        },
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.school), label: "Teacher"),
+          BottomNavigationBarItem(icon: Icon(Icons.newspaper), label: "News"),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
+        ],
+      ),
+    );
+  }
+}
+
 // ================= HOME =================
 
 class HomeScreen extends StatefulWidget {
@@ -482,23 +585,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Row(
                   children: [
                     Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        ElevatedButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const TeacherScreen(),
-                              ),
-                            ).then((_) {
-                              setState(() {});
-                            });
-                          },
-                          child: const Text("Teacher Panel 👩‍🏫"),
-                        ),
-
-                        const SizedBox(height: 16),
-
                         Text(
                           day,
                           style: const TextStyle(
@@ -1124,6 +1212,16 @@ class _ClassCardState extends State<ClassCard> {
                         foregroundColor: Colors.white,
                       ),
                       onPressed: () async {
+                        final authenticated = await authenticateUser();
+                        if (!authenticated) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Authentication failed. Cannot mark attendance."),
+                            ),
+                          );
+                          return;
+                        }
+
                         //open camera
                         await captureImage();
                         if (image == null) return;
@@ -1543,85 +1641,117 @@ class _TeacherScreenState extends State<TeacherScreen> {
 
       body: ListView(
         padding: const EdgeInsets.all(16),
-        children: classStatus.keys.map((subject) {
-          return Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFFD6E6F2),
-              borderRadius: BorderRadius.circular(20),
+        children: [
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const TodoScreen()),
+              );
+            },
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF9EDC8A),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text(
+                    "To-Do 📝",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 6),
+                  Text("Tap to manage tasks →"),
+                ],
+              ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        subject,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+          ),
+          ...classStatus.keys.map((subject) {
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFD6E6F2),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          subject,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ),
 
-                    StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                      stream: FirebaseFirestore.instance
-                          .collection('classes')
-                          .doc(subject)
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                        bool isActive = false;
+                      StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                        stream: FirebaseFirestore.instance
+                            .collection('classes')
+                            .doc(subject)
+                            .snapshots(),
+                        builder: (context, snapshot) {
+                          bool isActive = false;
 
-                        if (snapshot.hasData && snapshot.data!.data() != null) {
-                          final data = snapshot.data!.data()!;
-                          isActive = data['isActive'] ?? false;
-                        }
+                          if (snapshot.hasData && snapshot.data!.data() != null) {
+                            final data = snapshot.data!.data()!;
+                            isActive = data['isActive'] ?? false;
+                          }
 
-                        return Switch(
-                          value: isActive,
-                          onChanged: (value) async {
-                            await FirebaseFirestore.instance
-                                .collection('classes')
-                                .doc(subject)
-                                .set({'isActive': value});
-                          },
-                        );
-                      },
-                    ),
-                  ],
-                ),
+                          return Switch(
+                            value: isActive,
+                            onChanged: (value) async {
+                              await FirebaseFirestore.instance
+                                  .collection('classes')
+                                  .doc(subject)
+                                  .set({'isActive': value});
+                            },
+                          );
+                        },
+                      ),
+                    ],
+                  ),
 
-                const SizedBox(height: 10),
+                  const SizedBox(height: 10),
 
-                ElevatedButton(
-                  onPressed: () async {
-                    final today = DateTime.now().toIso8601String().split(
-                      'T',
-                    )[0];
+                  ElevatedButton(
+                    onPressed: () async {
+                      final today = DateTime.now().toIso8601String().split(
+                        'T',
+                      )[0];
 
-                    final snapshot = await FirebaseFirestore.instance
-                        .collection('attendance')
-                        .where('subject', isEqualTo: subject)
-                        .where('date', isEqualTo: today)
-                        .get();
+                      final snapshot = await FirebaseFirestore.instance
+                          .collection('attendance')
+                          .where('subject', isEqualTo: subject)
+                          .where('date', isEqualTo: today)
+                          .get();
 
-                    for (var doc in snapshot.docs) {
-                      await doc.reference.delete();
-                    }
+                      for (var doc in snapshot.docs) {
+                        await doc.reference.delete();
+                      }
 
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text("Reset done for $subject")),
-                    );
-                  },
-                  child: const Text("Reset Attendance 🔄"),
-                ),
-              ],
-            ),
-          );
-        }).toList(),
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text("Reset done for $subject")),
+                      );
+                    },
+                    child: const Text("Reset Attendance 🔄"),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ],
       ),
     );
   }
