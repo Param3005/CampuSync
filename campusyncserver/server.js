@@ -1,12 +1,23 @@
 const express = require("express");
 const fetch = require("node-fetch");
 const cors = require("cors");
+const fs = require("fs");
+const path = require("path");
+
+const logFile = path.join(__dirname, "server.log");
+
+function log(message) {
+  const timestamp = new Date().toISOString();
+  const logMessage = `[${timestamp}] ${message}\n`;
+  console.log(logMessage);
+  fs.appendFileSync(logFile, logMessage);
+}
 
 const app = express(); 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || "campusync-8626d";
-const PORT = process.env.PORT || 3000;
+
 
 app.use(cors());
 app.use(express.json());
@@ -115,8 +126,9 @@ async function getAttendanceSummary(idToken) {
 }
 
 app.post("/ask", async (req, res) => {
-
+  log("🔥 /ask endpoint called!");
   const message = req.body.message?.trim();
+  log("📝 Message received: " + message);
 
   if (!message) {
     return res.status(400).json({ error: "Message is required" });
@@ -137,11 +149,14 @@ app.post("/ask", async (req, res) => {
   }
 
   if (!GROQ_API_KEY) {
+    log("❌ GROQ_API_KEY is missing!");
     return res.status(500).json({
       error: "Missing GROQ_API_KEY environment variable"
     });
   }
 
+  log("📤 Sending to GROQ API: " + message);
+  
   try {
     const response = await fetch(
       "https://api.groq.com/openai/v1/chat/completions",
@@ -168,8 +183,35 @@ app.post("/ask", async (req, res) => {
     );
 
     const data = await response.json();
+    log("📥 GROQ Response status: " + response.status);
+    log("📥 GROQ Full Response: " + JSON.stringify(data, null, 2));
 
-    const text = data.choices?.[0]?.message?.content?.trim() || "No reply";
+    if (!response.ok) {
+      log("❌ GROQ API Error (not OK): " + JSON.stringify(data));
+      return res.status(response.status).json({
+        error: data.error?.message || "GROQ API error"
+      });
+    }
+
+    log("📊 Checking for choices: " + JSON.stringify(data.choices));
+    log("📊 First choice: " + JSON.stringify(data.choices?.[0]));
+    log("📊 Message: " + JSON.stringify(data.choices?.[0]?.message));
+    
+    const text = data.choices?.[0]?.message?.content?.trim();
+    log("✅ Final text: " + (text || "UNDEFINED/EMPTY"));
+    
+    if (!text) {
+      log("❌ No text found in response. Full response: " + JSON.stringify(data, null, 2));
+      return res.json({
+        candidates: [
+          {
+            content: {
+              parts: [{ text: "Sorry, I got an empty response from the AI." }]
+            }
+          }
+        ]
+      });
+    }
 
     res.json({
       candidates: [
@@ -182,11 +224,11 @@ app.post("/ask", async (req, res) => {
     });
 
   } catch (e) {
-    console.log(e);
-    res.status(500).json({ error: "Something went wrong" });
+    log("❌ Exception: " + (e.message || String(e)));
+    res.status(500).json({ error: "Something went wrong: " + e.message });
   }
 });
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => log(`Server running on port ${PORT}`));
