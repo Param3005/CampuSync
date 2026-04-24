@@ -133,16 +133,33 @@ Future<UserCredential> signInWithGoogle() async {
 
 Future<bool> authenticateUser() async {
   final LocalAuthentication auth = LocalAuthentication();
+
   try {
+    bool canCheckBiometrics = await auth.canCheckBiometrics;
+    bool isDeviceSupported = await auth.isDeviceSupported();
+
+    if (!canCheckBiometrics || !isDeviceSupported) {
+      print("Biometric not supported");
+      return false;
+    }
+
+    final availableBiometrics = await auth.getAvailableBiometrics();
+
+    if (availableBiometrics.isEmpty) {
+      print("No biometrics enrolled");
+      return false;
+    }
+
     return await auth.authenticate(
-      localizedReason: 'Please authenticate to mark attendance',
+      localizedReason: 'Authenticate to mark attendance',
       options: const AuthenticationOptions(
-        biometricOnly: true,
+        biometricOnly: true, // 🔥 THIS IS THE KEY CHANGE
         useErrorDialogs: true,
         stickyAuth: true,
       ),
     );
-  } catch (_) {
+  } catch (e) {
+    print("Biometric error: $e");
     return false;
   }
 }
@@ -985,26 +1002,33 @@ class _ChatScreenState extends State<ChatScreen> {
               itemCount: messages.length,
               itemBuilder: (context, index) {
                 final msg = messages[index];
+                final isUserMessage = msg["role"] == "user";
 
                 return Container(
-                  alignment: msg["role"] == "user"
+                  alignment: isUserMessage
                       ? Alignment.centerRight
                       : Alignment.centerLeft,
                   padding: const EdgeInsets.all(10),
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: msg["role"] == "user"
+                      color: isUserMessage
                           ? Colors.blue
-                          : Colors.grey[300],
+                          : const Color(0xFFE9D5FF),
+                      border: isUserMessage
+                          ? null
+                          : Border.all(
+                              color: const Color(0xFF7C3AED),
+                              width: 2,
+                            ),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       msg["text"]!,
                       style: TextStyle(
-                        color: msg["role"] == "user"
+                        color: isUserMessage
                             ? Colors.white
-                            : Colors.black,
+                            : Colors.black87,
                       ),
                     ),
                   ),
@@ -1015,21 +1039,34 @@ class _ChatScreenState extends State<ChatScreen> {
 
           if (isLoading) const CircularProgressIndicator(),
 
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  decoration: const InputDecoration(
-                    hintText: "Ask something...",
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    decoration: InputDecoration(
+                      hintText: "Ask something...",
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.send),
-                onPressed: sendMessage,
-              ),
-            ],
+                IconButton(
+                  icon: const Icon(Icons.send),
+                  onPressed: sendMessage,
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -1216,7 +1253,7 @@ class _ClassCardState extends State<ClassCard> {
                         if (!authenticated) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text("Authentication failed. Cannot mark attendance."),
+                              content: Text("Authentication cancelled. Please try again."),
                             ),
                           );
                           return;
