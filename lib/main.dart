@@ -54,8 +54,6 @@ void main() async {
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
-
   runApp(const CampuSyncApp());
 }
 
@@ -141,6 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final passwordController = TextEditingController();
 
   bool isLogin = true;
+  String selectedRole = 'student';
 
   @override
   Widget build(BuildContext context) {
@@ -186,7 +185,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
 
-                const SizedBox(height: 10),
+                if (!isLogin) const SizedBox(height: 10),
 
                 TextField(
                   controller: emailController,
@@ -202,6 +201,33 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
 
                 const SizedBox(height: 10),
+
+                if (!isLogin)
+                  DropdownButtonFormField<String>(
+                    value: selectedRole,
+                    decoration: InputDecoration(
+                      labelText: "Select Role",
+                      filled: true,
+                      fillColor: const Color(0xFFF8F6F3),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    items: ['student', 'teacher']
+                        .map((role) => DropdownMenuItem(
+                              value: role,
+                              child: Text(role),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        selectedRole = value!;
+                      });
+                    },
+                  ),
+
+                if (!isLogin) const SizedBox(height: 10),
 
                 TextField(
                   controller: passwordController,
@@ -250,6 +276,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           .set({
                             'name': nameController.text.trim(),
                             'email': emailController.text.trim(),
+                            'role': selectedRole,
                           });
                       }
                     } catch (e) {
@@ -260,6 +287,33 @@ class _LoginScreenState extends State<LoginScreen> {
                   },
                   child: Text(isLogin ? "Login" : "Sign Up"),
                 ),
+
+                if (isLogin)
+                  const SizedBox(height: 16),
+
+                if (isLogin)
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.login, color: Colors.red),
+                    label: const Text("Sign in with Google"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
+                      minimumSize: const Size(double.infinity, 50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: Colors.grey),
+                      ),
+                    ),
+                    onPressed: () async {
+                      try {
+                        await signInWithGoogle();
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(e.toString())),
+                        );
+                      }
+                    },
+                  ),
 
                 TextButton(
                   onPressed: () {
