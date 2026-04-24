@@ -15,7 +15,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 const String openAIApiKey = String.fromEnvironment('OPENAI_API_KEY');
-const String askAIEndpoint = "http://127.0.0.1:3000/ask";
+const String askAIEndpoint = "http://localhost:3000/ask";
 
 Future<String> askAI(String message) async {
   try {
@@ -379,30 +379,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 if (isLogin)
                   const SizedBox(height: 16),
 
-                if (isLogin)
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.login, color: Colors.red),
-                    label: const Text("Sign in with Google"),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black,
-                      minimumSize: const Size(double.infinity, 50),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: const BorderSide(color: Colors.grey),
-                      ),
-                    ),
-                    onPressed: () async {
-                      try {
-                        await signInWithGoogle();
-                      } catch (e) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(e.toString())),
-                        );
-                      }
-                    },
-                  ),
-
+                
                 TextButton(
                   onPressed: () {
                     setState(() {
