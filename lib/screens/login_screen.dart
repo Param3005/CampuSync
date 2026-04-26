@@ -1,9 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-
-import '../auth_helpers.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,9 +12,19 @@ class _LoginScreenState extends State<LoginScreen> {
   final nameController = TextEditingController();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
+  final enrollmentNumberController = TextEditingController();
 
   bool isLogin = true;
-  String selectedRole = 'student';
+  String selectedRole = 'Student';
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    emailController.dispose();
+    passwordController.dispose();
+    enrollmentNumberController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -82,7 +89,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 if (!isLogin)
                   DropdownButtonFormField<String>(
-                    value: selectedRole,
+                    initialValue: selectedRole,
                     decoration: InputDecoration(
                       labelText: "Select Role",
                       filled: true,
@@ -92,7 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         borderSide: BorderSide.none,
                       ),
                     ),
-                    items: ['student', 'teacher']
+                    items: ['Student', 'Teacher']
                         .map((role) => DropdownMenuItem(
                               value: role,
                               child: Text(role),
@@ -103,6 +110,22 @@ class _LoginScreenState extends State<LoginScreen> {
                         selectedRole = value!;
                       });
                     },
+                  ),
+
+                if (!isLogin && selectedRole == 'Student') const SizedBox(height: 10),
+
+                if (!isLogin && selectedRole == 'Student')
+                  TextField(
+                    controller: enrollmentNumberController,
+                    decoration: InputDecoration(
+                      labelText: "Enrollment Number",
+                      filled: true,
+                      fillColor: const Color(0xFFF8F6F3),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
                   ),
 
                 if (!isLogin) const SizedBox(height: 10),
@@ -135,10 +158,29 @@ class _LoginScreenState extends State<LoginScreen> {
                   onPressed: () async {
                     try {
                       if (isLogin) {
-                        await FirebaseAuth.instance.signInWithEmailAndPassword(
+                        final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
                           email: emailController.text.trim(),
                           password: passwordController.text.trim(),
                         );
+
+                        // Record student login
+                        final userDoc = await FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(userCredential.user!.uid)
+                            .get();
+
+                        if (userDoc.exists && userDoc['role'] == 'Student') {
+                          await FirebaseFirestore.instance
+                              .collection('loginSessions')
+                              .add({
+                                'studentId': userCredential.user!.uid,
+                                'name': userDoc['name'],
+                                'enrollmentNumber': userDoc['enrollmentNumber'] ?? 'N/A',
+                                'email': userDoc['email'],
+                                'loginTime': FieldValue.serverTimestamp(),
+                                'date': DateTime.now().toIso8601String().split('T')[0],
+                              });
+                        }
                       } else {
                         final userCredential = await FirebaseAuth.instance
                           .createUserWithEmailAndPassword(
@@ -148,16 +190,24 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         final uid = userCredential.user!.uid;
 
+                        final userData = {
+                          'name': nameController.text.trim(),
+                          'email': emailController.text.trim(),
+                          'role': selectedRole,
+                        };
+
+                        // Add enrollment number for students
+                        if (selectedRole == 'Student') {
+                          userData['enrollmentNumber'] = enrollmentNumberController.text.trim();
+                        }
+
                         await FirebaseFirestore.instance
                           .collection('users')
                           .doc(uid)
-                          .set({
-                            'name': nameController.text.trim(),
-                            'email': emailController.text.trim(),
-                            'role': selectedRole,
-                          });
+                          .set(userData);
                       }
                     } catch (e) {
+                      if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text(e.toString())),
                       );

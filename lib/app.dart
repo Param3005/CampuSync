@@ -34,7 +34,7 @@ class CampuSyncApp extends StatelessWidget {
                 final roleData = roleSnapshot.data?.data() as Map<String, dynamic>?;
                 final role = roleData?['role'] as String? ?? 'student';
 
-                if (role == 'teacher') {
+                if (role.toLowerCase() == 'teacher') {
                   return const TeacherNavigation();
                 }
 

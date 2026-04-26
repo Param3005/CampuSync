@@ -1,7 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
+import '../calendar_screen.dart';
 import '../class_status.dart';
+import 'student_login_tracking_screen.dart';
 import 'todo_screen.dart';
 
 class TeacherScreen extends StatefulWidget {
@@ -15,38 +19,127 @@ class _TeacherScreenState extends State<TeacherScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Teacher Panel")),
-      backgroundColor: const Color(0xFFFFF9F2),
+      backgroundColor: const Color(0xFFF8F6F3),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(FirebaseAuth.instance.currentUser!.uid)
+                    .get(),
+                builder: (context, snapshot) {
+                  String name = "Teacher";
 
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
+                  if (snapshot.hasData && snapshot.data!.data() != null) {
+                    final data = snapshot.data!.data() as Map<String, dynamic>;
+                    name = data['name'] ?? "Teacher";
+                  }
+
+                  return Text(
+                    "Good Morning, $name 👋",
+                    style: GoogleFonts.poppins(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 20),
+              ListView(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(0),
+                children: [
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const CalendarScreen()),
+                      );
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFDE2E4),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text(
+                            "Calendar 📅",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: 6),
+                          Text("Tap to view schedule →"),
+                        ],
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const TodoScreen()),
+                      );
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF9EDC8A),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text(
+                            "To-Do 📝",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: 6),
+                          Text("Tap to manage tasks →"),
+                        ],
+                      ),
+                    ),
+                  ),
           GestureDetector(
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const TodoScreen()),
+                MaterialPageRoute(builder: (_) => const StudentLoginTrackingScreen()),
               );
             },
             child: Container(
               margin: const EdgeInsets.only(bottom: 16),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF9EDC8A),
+                color: const Color(0xFFD6A5C0),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: const [
                   Text(
-                    "To-Do 📝",
+                    "Student Login Tracking 📊",
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   SizedBox(height: 6),
-                  Text("Tap to manage tasks →"),
+                  Text("View who logged in with enrollment number →"),
                 ],
               ),
             ),
@@ -130,7 +223,11 @@ class _TeacherScreenState extends State<TeacherScreen> {
               ),
             );
           }).toList(),
-        ],
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

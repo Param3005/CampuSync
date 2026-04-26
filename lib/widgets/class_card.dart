@@ -26,12 +26,36 @@ class ClassCard extends StatefulWidget {
 
   Future<void> captureImage() async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.camera);
+    
+    try {
+      var picked = await picker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.front,
+      );
 
-    if (picked != null) {
-      setState(() {
-        image = File(picked.path);
-      });
+      // Fallback for iOS Safari/web where camera might not work
+      if (picked == null && kIsWeb) {
+        picked = await picker.pickImage(source: ImageSource.gallery);
+      }
+
+      if (picked != null) {
+        setState(() {
+          image = File(picked!.path);
+        });
+      }
+    } catch (e) {
+      debugPrint("Camera error: $e");
+      // Fallback to gallery on error
+      try {
+        final picked = await picker.pickImage(source: ImageSource.gallery);
+        if (picked != null) {
+          setState(() {
+            image = File(picked.path);
+          });
+        }
+      } catch (galleryError) {
+        debugPrint("Gallery error: $galleryError");
+      }
     }
   }
 
@@ -121,11 +145,9 @@ class ClassCard extends StatefulWidget {
 
                         if (kIsWeb) {
                           authenticated = await showPasswordDialog(
-                          context,
-                          () async {
-                            await captureImage();
-                          },
-                        );
+                            context,
+                            () async {},
+                          );
                         } else {
                           authenticated = await authenticateUser();
                         }

@@ -2,8 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../streak.dart';
-
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -13,16 +11,6 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final nameController = TextEditingController();
-  @override
-  void initState() {
-    super.initState();
-    initData();
-  }
-
-  void initData() async {
-    await loadStreak();
-    setState(() {});
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -116,41 +104,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   },
                   child: const Text("Save Name"),
                 ),
-
-              const SizedBox(height: 4),
-
-              const Text(
-                "Keep going, you're doing great.",
-                style: TextStyle(fontSize: 14, color: Colors.black54),
-              ),
-
-              const SizedBox(height: 30),
-
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFE5D9),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Current Streak",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      "$streak days 🔥",
-                      style: const TextStyle(fontSize: 20),
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
         ),
