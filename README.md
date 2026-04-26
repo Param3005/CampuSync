@@ -1,6 +1,6 @@
 # campusync
 
-A new Flutter project.
+Face recognition attendance app for both students and teacher
 
 ## Getting Started
 
