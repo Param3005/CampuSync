@@ -16,6 +16,27 @@ class TeacherScreen extends StatefulWidget {
 }
 
 class _TeacherScreenState extends State<TeacherScreen> {
+  String? teacherName;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTeacherName();
+  }
+
+  Future<void> _loadTeacherName() async {
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(FirebaseAuth.instance.currentUser!.uid)
+        .get();
+    if (doc.exists && mounted) {
+      final data = doc.data() as Map<String, dynamic>;
+      setState(() {
+        teacherName = data['name'] ?? 'Teacher';
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -26,27 +47,12 @@ class _TeacherScreenState extends State<TeacherScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              FutureBuilder<DocumentSnapshot>(
-                future: FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(FirebaseAuth.instance.currentUser!.uid)
-                    .get(),
-                builder: (context, snapshot) {
-                  String name = "Teacher";
-
-                  if (snapshot.hasData && snapshot.data!.data() != null) {
-                    final data = snapshot.data!.data() as Map<String, dynamic>;
-                    name = data['name'] ?? "Teacher";
-                  }
-
-                  return Text(
-                    "Good Morning, $name 👋",
-                    style: GoogleFonts.poppins(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  );
-                },
+              Text(
+                "Good Morning, ${teacherName ?? 'Teacher'} 👋",
+                style: GoogleFonts.poppins(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const SizedBox(height: 20),
               ListView(

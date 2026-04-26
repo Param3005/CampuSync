@@ -169,7 +169,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             .doc(userCredential.user!.uid)
                             .get();
 
-                        if (userDoc.exists && userDoc['role'] == 'Student') {
+                        if (userDoc.exists && (userDoc['role'] as String?)?.toLowerCase() == 'student') {
                           await FirebaseFirestore.instance
                               .collection('loginSessions')
                               .add({

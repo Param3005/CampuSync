@@ -19,15 +19,31 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  String? userName;
+
   @override
   void initState() {
     super.initState();
     initData();
+    _loadUserName();
   }
 
   void initData() async {
     await loadStreak();
-    setState(() {});
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _loadUserName() async {
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(FirebaseAuth.instance.currentUser!.uid)
+        .get();
+    if (doc.exists && mounted) {
+      final data = doc.data() as Map<String, dynamic>;
+      setState(() {
+        userName = data['name'] ?? 'User';
+      });
+    }
   }
 
   @override
@@ -46,28 +62,12 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-               FutureBuilder<DocumentSnapshot>(
-                future: FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(FirebaseAuth.instance.currentUser!.uid)
-                    .get(),
-                builder: (context, snapshot) {
-
-                  String name = "User";
-
-                  if (snapshot.hasData && snapshot.data!.data() != null) {
-                    final data = snapshot.data!.data() as Map<String, dynamic>;
-                    name = data['name'] ?? "User";
-                  }
-
-                  return Text(
-                    "Good Morning, $name 👋",
-                    style: GoogleFonts.poppins(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  );
-                },
+              Text(
+                "Good Morning, ${userName ?? 'User'} 👋",
+                style: GoogleFonts.poppins(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
 
 

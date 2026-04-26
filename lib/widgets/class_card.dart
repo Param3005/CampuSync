@@ -10,6 +10,12 @@ import 'package:intl/intl.dart';
 import '../auth_helpers.dart';
 import '../streak.dart';
 
+bool get _isMobileWeb {
+  if (!kIsWeb) return false;
+  return defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
+}
+
 class ClassCard extends StatefulWidget {
   final String subject;
   final String teacher;
@@ -161,8 +167,55 @@ class ClassCard extends StatefulWidget {
                           return;
                         }
 
-                        await captureImage();
-                        if (image == null) return;
+                        if (kIsWeb) {
+                          // Show picker dialog to get fresh user gesture for iOS Safari
+                          final picker = ImagePicker();
+                          final XFile? picked = await showDialog<XFile?>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('Capture Photo'),
+                              content: const Text('Select how you want to add your photo'),
+                              actions: [
+                                if (_isMobileWeb)
+                                  TextButton(
+                                    onPressed: () async {
+                                      final result = await picker.pickImage(
+                                        source: ImageSource.camera,
+                                        preferredCameraDevice: CameraDevice.front,
+                                      );
+                                      if (context.mounted) Navigator.pop(context, result);
+                                    },
+                                    child: const Text('Camera'),
+                                  ),
+                                TextButton(
+                                  onPressed: () async {
+                                    final result = await picker.pickImage(source: ImageSource.gallery);
+                                    if (context.mounted) Navigator.pop(context, result);
+                                  },
+                                  child: const Text('Gallery'),
+                                ),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: const Text('Cancel'),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (picked != null) {
+                            setState(() {
+                              image = File(picked.path);
+                            });
+                          }
+                        } else {
+                          await captureImage();
+                        }
+
+                        if (image == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("No photo captured. Attendance not marked.")),
+                          );
+                          return;
+                        }
 
                         final now = DateTime.now();
                         final today = now.toIso8601String().split('T')[0];
