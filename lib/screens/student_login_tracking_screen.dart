@@ -11,8 +11,7 @@ class StudentLoginTrackingScreen extends StatefulWidget {
 }
 
 class _StudentLoginTrackingScreenState extends State<StudentLoginTrackingScreen> {
-  String selectedDate =
-      DateTime.now().toIso8601String().split('T')[0];
+  String selectedDate = DateTime.now().toIso8601String().split('T')[0];
 
   @override
   Widget build(BuildContext context) {
@@ -48,43 +47,39 @@ class _StudentLoginTrackingScreenState extends State<StudentLoginTrackingScreen>
                       });
                     }
                   },
-                  child: Text(DateFormat('dd MMM yyyy')
-                      .format(DateTime.parse(selectedDate))),
+                  child: Text(
+                    DateFormat('dd MMM yyyy').format(DateTime.parse(selectedDate)),
+                  ),
                 ),
               ],
             ),
           ),
-          // Login count
+          // Total Attendance stat
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
-                  .collection('loginSessions')
+                  .collection('attendance')
                   .where('date', isEqualTo: selectedDate)
                   .snapshots(),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                final totalLogins = snapshot.data?.docs.length ?? 0;
-
+                final totalAttendance = snapshot.data?.docs.length ?? 0;
                 return Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF9EDC8A),
+                    color: const Color(0xFFD6E6F2),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        "Total Students Logged In:",
+                        "Total Attendance",
                         style: TextStyle(fontSize: 14),
                       ),
                       Text(
-                        totalLogins.toString(),
+                        totalAttendance.toString(),
                         style: const TextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.bold,
@@ -98,80 +93,223 @@ class _StudentLoginTrackingScreenState extends State<StudentLoginTrackingScreen>
             ),
           ),
           const SizedBox(height: 16),
-          // Student list
+          // Combined student list from BOTH collections
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('loginSessions')
                   .where('date', isEqualTo: selectedDate)
                   .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+              builder: (context, loginSnapshot) {
+                return StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('attendance')
+                      .where('date', isEqualTo: selectedDate)
+                      .snapshots(),
+                  builder: (context, attendanceSnapshot) {
+                    if (loginSnapshot.connectionState == ConnectionState.waiting ||
+                        attendanceSnapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
 
-                if (snapshot.hasError) {
-                  debugPrint("Firestore error: ${snapshot.error}");
-                  return Center(child: Text("Error: ${snapshot.error}"));
-                }
+                    if (loginSnapshot.hasError) {
+                      debugPrint("Login Firestore error: ${loginSnapshot.error}");
+                      return Center(child: Text("Error: ${loginSnapshot.error}"));
+                    }
+                    if (attendanceSnapshot.hasError) {
+                      debugPrint("Attendance Firestore error: ${attendanceSnapshot.error}");
+                      return Center(child: Text("Error: ${attendanceSnapshot.error}"));
+                    }
 
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(
-                    child: Text("No students logged in today"),
-                  );
-                }
+                    // Build login map by studentId
+                    final Map<String, Map<String, dynamic>> loginMap = {};
+                    if (loginSnapshot.hasData) {
+                      for (var doc in loginSnapshot.data!.docs) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final studentId = data['studentId'] as String?;
+                        if (studentId != null && !loginMap.containsKey(studentId)) {
+                          loginMap[studentId] = data;
+                        }
+                      }
+                    }
 
-                final docs = snapshot.data!.docs.toList()
-                  ..sort((a, b) {
-                    final timeA = (a['loginTime'] as Timestamp?)?.toDate() ?? DateTime(1970);
-                    final timeB = (b['loginTime'] as Timestamp?)?.toDate() ?? DateTime(1970);
-                    return timeB.compareTo(timeA);
-                  });
+                    // Build attendance map by studentId
+                    final Map<String, List<Map<String, dynamic>>> attendanceMap = {};
+                    if (attendanceSnapshot.hasData) {
+                      for (var doc in attendanceSnapshot.data!.docs) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final studentId = data['studentId'] as String?;
+                        if (studentId != null) {
+                          attendanceMap.putIfAbsent(studentId, () => []);
+                          attendanceMap[studentId]!.add(data);
+                        }
+                      }
+                    }
 
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: docs.length,
-                  itemBuilder: (context, index) {
-                    final doc = docs[index];
-                    final data = doc.data() as Map<String, dynamic>;
+                    // Union of all studentIds from both collections
+                    final allStudentIds = <String>{...loginMap.keys, ...attendanceMap.keys};
 
-                    final loginTime = (data['loginTime'] as Timestamp?)
-                            ?.toDate() ??
-                        DateTime.now();
+                    if (allStudentIds.isEmpty) {
+                      return const Center(
+                        child: Text("No students logged in or marked attendance on this date"),
+                      );
+                    }
 
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: const Color(0xFFD6E6F2),
-                          child: Text(
-                            (index + 1).toString(),
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                    // Convert to list and sort: students with login sessions first, sorted by login time
+                    final studentList = allStudentIds.toList();
+                    studentList.sort((a, b) {
+                      final loginA = loginMap[a];
+                      final loginB = loginMap[b];
+                      if (loginA != null && loginB != null) {
+                        final timeA = (loginA['loginTime'] as Timestamp?)?.toDate() ?? DateTime(1970);
+                        final timeB = (loginB['loginTime'] as Timestamp?)?.toDate() ?? DateTime(1970);
+                        return timeB.compareTo(timeA);
+                      }
+                      if (loginA != null) return -1;
+                      if (loginB != null) return 1;
+                      return 0;
+                    });
+
+                    return ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: studentList.length,
+                      itemBuilder: (context, index) {
+                        final studentId = studentList[index];
+                        final loginData = loginMap[studentId];
+                        final studentAttendance = attendanceMap[studentId] ?? [];
+
+                        final loginTime = (loginData?['loginTime'] as Timestamp?)?.toDate();
+
+                        // Get display name - prefer loginSession name, fallback to attendance name
+                        String displayName = loginData?['name'] as String? ?? 'Unknown';
+                        if (displayName == 'Unknown' && studentAttendance.isNotEmpty) {
+                          displayName = studentAttendance.first['studentName'] as String? ?? 'Unknown';
+                        }
+
+                        final enrollmentNumber = loginData?['enrollmentNumber'] as String? ??
+                            (studentAttendance.isNotEmpty
+                                ? studentAttendance.first['enrollmentNumber'] as String?
+                                : null) ??
+                            'N/A';
+
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    CircleAvatar(
+                                      backgroundColor: const Color(0xFFD6E6F2),
+                                      child: Text(
+                                        (index + 1).toString(),
+                                        style: const TextStyle(fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            displayName,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            "Enrollment: $enrollmentNumber",
+                                            style: const TextStyle(fontSize: 12),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (loginTime != null)
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: [
+                                          const Text(
+                                            "Login Time",
+                                            style: TextStyle(fontSize: 10, color: Colors.grey),
+                                          ),
+                                          Text(
+                                            DateFormat('hh:mm a').format(loginTime),
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.green,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                    else
+                                      const Text(
+                                        "No login",
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.orange,
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                const Divider(height: 20),
+                                // Attendance section
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.check_circle_outline,
+                                      size: 16,
+                                      color: Color(0xFF473C33),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    const Text(
+                                      "Attendance:",
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                if (studentAttendance.isEmpty)
+                                  const Text(
+                                    "No attendance marked for this date",
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.red,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  )
+                                else
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: studentAttendance.map((att) {
+                                      final subject = att['subject'] as String? ?? 'Unknown';
+                                      final time = att['time'] as String? ?? '--:--';
+                                      return Chip(
+                                        backgroundColor: const Color(0xFFD6E6F2),
+                                        padding: EdgeInsets.zero,
+                                        labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        label: Text(
+                                          "$subject ($time)",
+                                          style: const TextStyle(fontSize: 11),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                              ],
+                            ),
                           ),
-                        ),
-                        title: Text(
-                          data['name'] ?? 'Unknown',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(height: 4),
-                            Text(
-                              "Enrollment: ${data['enrollmentNumber'] ?? 'N/A'}",
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            Text(
-                              "Time: ${DateFormat('hh:mm a').format(loginTime)}",
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.green,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                        );
+                      },
                     );
                   },
                 );
@@ -183,3 +321,4 @@ class _StudentLoginTrackingScreenState extends State<StudentLoginTrackingScreen>
     );
   }
 }
+
