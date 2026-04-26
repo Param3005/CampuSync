@@ -1,20 +1,12 @@
-import 'dart:io';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../auth_helpers.dart';
+import '../image_helpers.dart';
 import '../streak.dart';
-
-bool get _isMobileWeb {
-  if (!kIsWeb) return false;
-  return defaultTargetPlatform == TargetPlatform.android ||
-      defaultTargetPlatform == TargetPlatform.iOS;
-}
 
 class ClassCard extends StatefulWidget {
   final String subject;
@@ -26,44 +18,8 @@ class ClassCard extends StatefulWidget {
   State<ClassCard> createState() => _ClassCardState();
 }
 
-  class _ClassCardState extends State<ClassCard> {
-  bool attendanceMarked = false;
-  File? image;
-
-  Future<void> captureImage() async {
-    final picker = ImagePicker();
-    
-    try {
-      var picked = await picker.pickImage(
-        source: ImageSource.camera,
-        preferredCameraDevice: CameraDevice.front,
-      );
-
-      // Fallback for iOS Safari/web where camera might not work
-      if (picked == null && kIsWeb) {
-        picked = await picker.pickImage(source: ImageSource.gallery);
-      }
-
-      if (picked != null) {
-        setState(() {
-          image = File(picked!.path);
-        });
-      }
-    } catch (e) {
-      debugPrint("Camera error: $e");
-      // Fallback to gallery on error
-      try {
-        final picked = await picker.pickImage(source: ImageSource.gallery);
-        if (picked != null) {
-          setState(() {
-            image = File(picked.path);
-          });
-        }
-      } catch (galleryError) {
-        debugPrint("Gallery error: $galleryError");
-      }
-    }
-  }
+class _ClassCardState extends State<ClassCard> {  
+  bool isMarking = false;
 
   @override
   Widget build(BuildContext context) {
@@ -89,9 +45,9 @@ class ClassCard extends StatefulWidget {
                 isEqualTo: DateTime.now().toIso8601String().split('T')[0],
               )
               .where(
-                      'studentId',
-                      isEqualTo: FirebaseAuth.instance.currentUser!.uid,
-                    )
+                'studentId',
+                isEqualTo: FirebaseAuth.instance.currentUser!.uid,
+              )
               .get(),
           builder: (context, snapshot2) {
             bool alreadyMarked = false;
@@ -117,13 +73,9 @@ class ClassCard extends StatefulWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-
                   const SizedBox(height: 4),
-
                   Text(widget.teacher),
-
                   const SizedBox(height: 12),
-
                   if (isActive)
                     const Text(
                       "Class Active 🔴",
@@ -137,122 +89,178 @@ class ClassCard extends StatefulWidget {
                       "Class not active",
                       style: TextStyle(color: Colors.black54),
                     ),
-
                   const SizedBox(height: 10),
-
                   if (isActive && !alreadyMarked)
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF64B5F6),
                         foregroundColor: Colors.white,
                       ),
-                      onPressed: () async {
-                        bool authenticated;
+                      onPressed: isMarking
+                          ? null
+                          : () async {
+                              setState(() => isMarking = true);
 
-                        if (kIsWeb) {
-                          authenticated = await showPasswordDialog(
-                            context,
-                            () async {},
-                          );
-                        } else {
-                          authenticated = await authenticateUser();
-                        }
+                              try {
+                                // Step 1: Authenticate (password or biometric)
+                                bool authenticated;
+                                if (kIsWeb) {
+                                  authenticated = await showPasswordDialog(
+                                    context,
+                                    () async {},
+                                  );
+                                } else {
+                                  authenticated = await authenticateUser();
+                                }
 
-                        if (!authenticated) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Authentication cancelled. Please try again."),
-                            ),
-                          );
-                          return;
-                        }
+                                if (!authenticated) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                            "Authentication cancelled. Please try again."),
+                                      ),
+                                    );
+                                  }
+                                  return;
+                                }
 
-                        if (kIsWeb) {
-                          // Show picker dialog to get fresh user gesture for iOS Safari
-                          final picker = ImagePicker();
-                          final XFile? picked = await showDialog<XFile?>(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('Capture Photo'),
-                              content: const Text('Select how you want to add your photo'),
-                              actions: [
-                                if (_isMobileWeb)
-                                  TextButton(
-                                    onPressed: () async {
-                                      final result = await picker.pickImage(
-                                        source: ImageSource.camera,
-                                        preferredCameraDevice: CameraDevice.front,
-                                      );
-                                      if (context.mounted) Navigator.pop(context, result);
-                                    },
-                                    child: const Text('Camera'),
-                                  ),
-                                TextButton(
-                                  onPressed: () async {
-                                    final result = await picker.pickImage(source: ImageSource.gallery);
-                                    if (context.mounted) Navigator.pop(context, result);
-                                  },
-                                  child: const Text('Gallery'),
-                                ),
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text('Cancel'),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (picked != null) {
-                            setState(() {
-                              image = File(picked.path);
-                            });
-                          }
-                        } else {
-                          await captureImage();
-                        }
+                                // Step 2: Fetch reference face photo
+                                final user = FirebaseAuth.instance.currentUser!;
+                                final userDoc = await FirebaseFirestore
+                                    .instance
+                                    .collection('users')
+                                    .doc(user.uid)
+                                    .get();
 
-                        if (image == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("No photo captured. Attendance not marked.")),
-                          );
-                          return;
-                        }
+                                final userData = userDoc.data();
+                                final refPhotoBase64 =
+                                    userData?['facePhotoBase64'] as String?;
 
-                        final now = DateTime.now();
-                        final today = now.toIso8601String().split('T')[0];
-                        final time = DateFormat('HH:mm').format(now);
+                                if (refPhotoBase64 == null ||
+                                    refPhotoBase64.isEmpty) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          "No face photo found. Please set your face photo in Profile first.",
+                                        ),
+                                        backgroundColor: Colors.orange,
+                                      ),
+                                    );
+                                  }
+                                  return;
+                                }
 
-                        final user = FirebaseAuth.instance.currentUser!;
-                        final userDoc = await FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(user.uid)
-                            .get();
+                                // Step 3: Capture attendance face photo
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                          "Please capture your face for verification"),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
 
-                        final userData = userDoc.data() as Map<String, dynamic>;
-                        
-                        //save attendance
-                        await FirebaseFirestore.instance
-                            .collection('attendance')
-                            .add({
-                          'subject': widget.subject,
-                          'date': today,
-                          'time': time,
-                          'studentId': user.uid,
-                          'studentName': userData['name'],
-                        });
+                                final newPhotoBytes =
+                                    await pickFacePhoto(context);
 
-                        updateStreak();
+                                if (newPhotoBytes == null) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                            "No photo captured. Attendance not marked."),
+                                      ),
+                                    );
+                                  }
+                                  return;
+                                }
 
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text("Attendance saved for ${widget.subject} ✅"),
-                          ),
-                        );
+                                // Step 4: Compare faces
+                                final refBytes = base64ToBytes(refPhotoBase64);
+                                final similarity = await compareFacePhotos(
+                                  refBytes,
+                                  newPhotoBytes,
+                                );
 
-                        setState(() {});
-                      },
-                      child: const Text("Mark Attendance 📸"),
+                                if (similarity < 70) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          "Face verification failed (${similarity.toStringAsFixed(1)}% match). Attendance not marked.",
+                                        ),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
+                                  return;
+                                }
+
+                                // Step 5: Save attendance
+                                final now = DateTime.now();
+                                final today =
+                                    now.toIso8601String().split('T')[0];
+                                final time = DateFormat('HH:mm').format(now);
+
+                                await FirebaseFirestore.instance
+                                    .collection('attendance')
+                                    .add({
+                                  'subject': widget.subject,
+                                  'date': today,
+                                  'time': time,
+                                  'studentId': user.uid,
+                                  'studentName': userData?['name'] ?? 'User',
+                                  'enrollmentNumber':
+                                      userData?['enrollmentNumber'] ?? 'N/A',
+                                  'facePhotoBase64': bytesToBase64(compressFacePhoto(newPhotoBytes)),
+                                  'faceMatchScore': similarity,
+                                });
+
+                                updateStreak();
+
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        "Attendance saved for ${widget.subject} ✅ (${similarity.toStringAsFixed(1)}% match)",
+                                      ),
+                                    ),
+                                  );
+                                }
+
+                                setState(() {});
+                              } catch (e, stack) {
+                                debugPrint('Mark attendance error: $e');
+                                debugPrint(stack.toString());
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Error: $e'),
+                                      backgroundColor: Colors.red,
+                                      duration: const Duration(seconds: 5),
+                                    ),
+                                  );
+                                }
+                              } finally {
+                                if (mounted) {
+                                  setState(() => isMarking = false);
+                                }
+                              }
+                            },
+                      child: isMarking
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text("Mark Attendance 📸"),
                     ),
-
                   if (alreadyMarked)
                     const Text(
                       "Attendance Submitted ✅",
