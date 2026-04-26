@@ -13,6 +13,15 @@ class StudentLoginTrackingScreen extends StatefulWidget {
 class _StudentLoginTrackingScreenState
     extends State<StudentLoginTrackingScreen> {
   String selectedDate = DateTime.now().toIso8601String().split('T')[0];
+  String selectedSubject = 'All Subjects';
+
+  final List<String> subjects = [
+    'All Subjects',
+    'Internet Of Things',
+    'E-Commerce',
+    'Data Warehousing',
+    'Deep Learning',
+  ];
 
   Future<Map<String, dynamic>> _fetchData() async {
     final loginSnapshot = await FirebaseFirestore.instance
@@ -46,8 +55,30 @@ class _StudentLoginTrackingScreenState
       }
     }
 
+    // Filter by subject if needed
+    Map<String, List<Map<String, dynamic>>> filteredAttendanceMap = {};
+    int totalAttendance = 0;
+
+    if (selectedSubject == 'All Subjects') {
+      filteredAttendanceMap = attendanceMap;
+      totalAttendance = attendanceSnapshot.docs.length;
+    } else {
+      for (var entry in attendanceMap.entries) {
+        final filtered = entry.value
+            .where((att) => att['subject'] == selectedSubject)
+            .toList();
+        if (filtered.isNotEmpty) {
+          filteredAttendanceMap[entry.key] = filtered;
+        }
+        totalAttendance += filtered.length;
+      }
+    }
+
     // Union of all studentIds
-    final allStudentIds = <String>{...loginMap.keys, ...attendanceMap.keys};
+    final allStudentIds = <String>{
+      ...loginMap.keys,
+      ...filteredAttendanceMap.keys,
+    };
 
     // Sort: login sessions first, by login time desc
     final studentList = allStudentIds.toList();
@@ -55,8 +86,10 @@ class _StudentLoginTrackingScreenState
       final loginA = loginMap[a];
       final loginB = loginMap[b];
       if (loginA != null && loginB != null) {
-        final timeA = (loginA['loginTime'] as Timestamp?)?.toDate() ?? DateTime(1970);
-        final timeB = (loginB['loginTime'] as Timestamp?)?.toDate() ?? DateTime(1970);
+        final timeA = (loginA['loginTime'] as Timestamp?)?.toDate() ??
+            DateTime(1970);
+        final timeB = (loginB['loginTime'] as Timestamp?)?.toDate() ??
+            DateTime(1970);
         return timeB.compareTo(timeA);
       }
       if (loginA != null) return -1;
@@ -65,10 +98,10 @@ class _StudentLoginTrackingScreenState
     });
 
     return {
-      'totalAttendance': attendanceSnapshot.docs.length,
+      'totalAttendance': totalAttendance,
       'studentList': studentList,
       'loginMap': loginMap,
-      'attendanceMap': attendanceMap,
+      'attendanceMap': filteredAttendanceMap,
     };
   }
 
@@ -133,6 +166,45 @@ class _StudentLoginTrackingScreenState
                   ],
                 ),
               ),
+              // Subject filter
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: selectedSubject,
+                      isExpanded: true,
+                      icon: const Icon(Icons.filter_list),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF473C33),
+                      ),
+                      items: subjects.map((subject) {
+                        return DropdownMenuItem(
+                          value: subject,
+                          child: Text(subject),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() {
+                            selectedSubject = value;
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
               // Total Attendance stat
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -146,9 +218,11 @@ class _StudentLoginTrackingScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        "Total Attendance",
-                        style: TextStyle(fontSize: 14),
+                      Text(
+                        selectedSubject == 'All Subjects'
+                            ? "Total Attendance"
+                            : "$selectedSubject Attendance",
+                        style: const TextStyle(fontSize: 14),
                       ),
                       Text(
                         totalAttendance.toString(),
@@ -166,9 +240,12 @@ class _StudentLoginTrackingScreenState
               // Student list
               Expanded(
                 child: studentList.isEmpty
-                    ? const Center(
+                    ? Center(
                         child: Text(
-                            "No students logged in or marked attendance on this date"),
+                          selectedSubject == 'All Subjects'
+                              ? "No students logged in or marked attendance on this date"
+                              : "No students marked attendance for $selectedSubject on this date",
+                        ),
                       )
                     : ListView.builder(
                         padding: const EdgeInsets.all(16),
