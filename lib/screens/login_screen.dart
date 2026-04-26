@@ -15,6 +15,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final enrollmentNumberController = TextEditingController();
 
   bool isLogin = true;
+  bool obscurePassword = true;
   String selectedRole = 'Student';
 
   @override
@@ -44,7 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
 
-                // 🔥 TITLE
+                // Title
                 Text(
                   isLogin ? "CampuSync" : "Create Account ✨",
                   style: const TextStyle(
@@ -132,7 +133,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 TextField(
                   controller: passwordController,
-                  obscureText: true,
+                  obscureText: obscurePassword,
                   decoration: InputDecoration(
                     labelText: "Password",
                     filled: true,
@@ -140,6 +141,17 @@ class _LoginScreenState extends State<LoginScreen> {
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none,
+                    ),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        obscurePassword ? Icons.visibility_off : Icons.visibility,
+                        color: const Color(0xFF473C33),
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          obscurePassword = !obscurePassword;
+                        });
+                      },
                     ),
                   ),
                 ),
@@ -219,7 +231,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 if (isLogin)
                   const SizedBox(height: 16),
 
-                
                 TextButton(
                   onPressed: () {
                     setState(() {
